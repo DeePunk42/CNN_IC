@@ -10,7 +10,7 @@ module Top_tb;
     reg [7:0] fclayer_kernel[0:26];
 
     // 输出信号
-    wire [15:0] fc_out;
+    wire [7:0] fc_out;
 
 
     // 实例化被测试模块
@@ -40,9 +40,9 @@ module Top_tb;
         rst = 1;
 
         // 初始化卷积核
-        conv_kernel[0][0][0] = 8'h01; conv_kernel[0][0][1] = 8'h02; conv_kernel[0][0][2] = 8'h03;
-        conv_kernel[0][1][0] = 8'h04; conv_kernel[0][1][1] = 8'h05; conv_kernel[0][1][2] = 8'h06;
-        conv_kernel[0][2][0] = 8'h07; conv_kernel[0][2][1] = 8'h08; conv_kernel[0][2][2] = 8'h09;
+        conv_kernel[0][0][0] = 8'h31; conv_kernel[0][0][1] = 8'h80; conv_kernel[0][0][2] = 8'hf1;
+        conv_kernel[0][1][0] = 8'h22; conv_kernel[0][1][1] = 8'h30; conv_kernel[0][1][2] = 8'hf1;
+        conv_kernel[0][2][0] = 8'h80; conv_kernel[0][2][1] = 8'hf1; conv_kernel[0][2][2] = 8'hf0;
 
         conv_kernel[1][0][0] = 8'h01; conv_kernel[1][0][1] = 8'h02; conv_kernel[1][0][2] = 8'h03;
         conv_kernel[1][1][0] = 8'h04; conv_kernel[1][1][1] = 8'h05; conv_kernel[1][1][2] = 8'h06;
@@ -67,10 +67,10 @@ module Top_tb;
         rst = 0;
 
         // 初始化输入数据
-        data_in[0] = 8'h01; data_in[1] = 8'h02; data_in[2] = 8'h03;
-        data_in[3] = 8'h04; data_in[4] = 8'h05; data_in[5] = 8'h06;
-        data_in[6] = 8'h07; data_in[7] = 8'h08; data_in[8] = 8'h09;
-        data_in[9] = 8'h0A; data_in[10] = 8'h0B;
+        data_in[0] = 8'h31; data_in[1] = 8'ha2; data_in[2] = 8'h93;
+        data_in[3] = 8'hb1; data_in[4] = 8'h50; data_in[5] = 8'ha1;
+        data_in[6] = 8'ha0; data_in[7] = 8'he0; data_in[8] = 8'h71;
+        data_in[9] = 8'hf0; data_in[10] = 8'hf1;
 
         // 运行仿真一段时间
         #10;

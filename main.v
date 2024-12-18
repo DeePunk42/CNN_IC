@@ -1,21 +1,79 @@
 reg signed [7:0] conv_kernel[0:2][0:2][0:2]; //卷积核
 reg signed [7:0] fclayer_kernel[0:26]; //全连接层核
 
-module TopModule(
+module InputModule(
+    input wire clk,
+    input wire rst,
+    input wire mode,    // 0: weight, 1: data
+    input wire signed [7:0] data_in,
+    output wire signed [7:0] data_out[0:10],
+    output reg signed [7:0] conv_kernel[0:2][0:2][0:2],
+    output reg signed [7:0] fclayer_kernel[0:26],
+    output reg clk_div11,      // 11分频计数器
+)
+
+    reg signed [7:0] data_buf[0:10];
+    integer cnt_0, cnt_1;
+
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            //clean conv_kernel and fclayer_kernel
+            for (i = 0; i < 3; i = i + 1) begin
+                for (j = 0; j < 3; j = j + 1) begin
+                    for (k = 0; k < 3; k = k + 1) begin
+                        conv_kernel[i][j][k] = 0;
+                    end
+                end
+            end
+
+            for (i = 0; i < 27; i = i + 1) begin
+                fclayer_kernel[i] = 0;
+            end
+
+            cnt_0 = 0;
+            cnt_1 = 0;
+            clk_div11 = 0;
+
+        end else begin
+            if mode == 0 begin
+                //weight mode
+                if cnt_0 < 27 begin
+                    conv_kernel[(cnt_0/9)%3][(cnt_0/3)%3][cnt_0%3] = data_in;
+                end else if cnt_0 < 54 begin
+                    fclayer_kernel[cnt_0-27] = data_in;
+                end
+                cnt_0 = cnt_0 + 1;
+            end else begin
+                //data mode
+                if cnt_1%11 == 0 begin
+                    data_out = data_buf;
+                    clk_div11 = ~clk_div11;
+                end
+                data_buf[cnt_1%11] = data_in;
+                cnt_1 = cnt_1 + 1;
+            end
+
+        end
+
+    end
+
+endmodule
+
+module CalcModule(
     input wire clk,
     input wire rst,
     input wire signed [7:0] data_in[0:10],    // 输入数据 (8位*11) 行
     input wire signed [7:0] conv_kernel[0:2][0:2][0:2], // 卷积核
     input wire signed [7:0] fclayer_kernel[0:26], // 全连接层核
-    output wire signed [15:0] fc_out    // 输出数据 (16位)
+    output wire signed [7:0] fc_out    // 输出数据 (8位)
 );
 
-    wire signed [15:0] conv_out_0[0:5];
-    wire signed [15:0] conv_out_1[0:5];
-    wire signed [15:0] conv_out_2[0:5];
-    wire signed [15:0] poll_out_0[0:2];
-    wire signed [15:0] poll_out_1[0:2];
-    wire signed [15:0] poll_out_2[0:2];
+    wire signed [7:0] conv_out_0[0:5];
+    wire signed [7:0] conv_out_1[0:5];
+    wire signed [7:0] conv_out_2[0:5];
+    wire signed [7:0] poll_out_0[0:2];
+    wire signed [7:0] poll_out_1[0:2];
+    wire signed [7:0] poll_out_2[0:2];
 
     reg clk_div2;           // 二分频输出
     reg clk_div4;           // 四分频输出
@@ -97,9 +155,9 @@ module ConvLayer(
     reg signed [7:0] data_buf_0[0:12];     // 当前行数据
     reg signed [7:0] data_buf_1[0:12];     // 上一行数据
     reg signed [7:0] data_buf_2[0:12];     // 上两行数据
-    reg signed [20:0] sum_0[0:5];                 // 累加结果 (16位*6)
-    reg signed [20:0] sum_1[0:5];                 // 累加结果 (16位*6)
-    reg signed [20:0] sum_2[0:5];                 // 累加结果 (16位*6)
+    reg signed [19:0] sum_0[0:5];                 // 累加结果 (20位*6)
+    reg signed [19:0] sum_1[0:5];                 // 累加结果 (20位*6)
+    reg signed [19:0] sum_2[0:5];                 // 累加结果 (20位*6)
     integer i, j;
     integer cnt;
 
@@ -156,9 +214,11 @@ module ConvLayer(
                     end
                 end
 
-                conv_out_0 = sum_0;
-                conv_out_1 = sum_1;
-                conv_out_2 = sum_2;
+                for (i = 0; i < 6; i = i + 1) begin
+                    conv_out_0[i] = ($signed(sum_0[i][19:8]) > 127) ? 127 : ($signed(sum_0[i][19:8]) < -128) ? -128 : sum_0[i][15:8];
+                    conv_out_1[i] = ($signed(sum_1[i][19:8]) > 127) ? 127 : ($signed(sum_1[i][19:8]) < -128) ? -128 : sum_1[i][15:8];
+                    conv_out_2[i] = ($signed(sum_2[i][19:8]) > 127) ? 127 : ($signed(sum_2[i][19:8]) < -128) ? -128 : sum_2[i][15:8];
+                end
 
             end else begin
                 for (i = 0; i < 6; i = i + 1) begin
@@ -175,16 +235,16 @@ endmodule
 module PoolingLayer(
     input wire clk,
     input wire rst,
-    input wire signed [15:0] data_in_0[0:5],    // 输入数据 (16位*6) 行，分别对应三种卷积核的输入
-    input wire signed [15:0] data_in_1[0:5],
-    input wire signed [15:0] data_in_2[0:5],
-    output reg signed [15:0] poll_out_0[0:2],    // 输出数据 (16位*3) 行，分别对应三种卷积核的输入
-    output reg signed [15:0] poll_out_1[0:2],
-    output reg signed [15:0] poll_out_2[0:2]
+    input wire signed [7:0] data_in_0[0:5],    // 输入数据 (16位*6) 行，分别对应三种卷积核的输入
+    input wire signed [7:0] data_in_1[0:5],
+    input wire signed [7:0] data_in_2[0:5],
+    output reg signed [7:0] poll_out_0[0:2],    // 输出数据 (16位*3) 行，分别对应三种卷积核的输入
+    output reg signed [7:0] poll_out_1[0:2],
+    output reg signed [7:0] poll_out_2[0:2]
 );
-    reg signed [15:0] data_buf_0[0:3];     // data_in_0 缓存
-    reg signed [15:0] data_buf_1[0:3];     // data_in_1 缓存
-    reg signed [15:0] data_buf_2[0:3];     // data_in_2 缓存
+    reg signed [7:0] data_buf_0[0:3];     // data_in_0 缓存
+    reg signed [7:0] data_buf_1[0:3];     // data_in_1 缓存
+    reg signed [7:0] data_buf_2[0:3];     // data_in_2 缓存
 
     integer i;
     integer cnt;
@@ -242,33 +302,35 @@ endmodule
 module FCLayer(
     input wire clk,
     input wire rst,
-    input wire signed [15:0] data_in_0[0:2],    // 输入数据 (16位*3) 行，分别对应三种卷积核的输入
-    input wire signed [15:0] data_in_1[0:2],
-    input wire signed [15:0] data_in_2[0:2],
+    input wire signed [7:0] data_in_0[0:2],    // 输入数据 (8位*3) 行，分别对应三种卷积核的输入
+    input wire signed [7:0] data_in_1[0:2],
+    input wire signed [7:0] data_in_2[0:2],
     input wire signed [7:0] fclayer_kernel[0:26], // 全连接层核
-    output reg signed [15:0] fc_out    // 输出数据 (8位*3) 行
+    output reg signed [7:0] fc_out    // 输出数据
 );
 
     integer i;
     integer cnt;
+    reg signed [20:0] fc_out_buf;   // 输出缓存 21位
 
     always @(posedge clk or posedge rst) begin
         if (rst) begin
 
-            fc_out = 0;
+            fc_out_buf = 0;
             cnt = 0;
 
         end else begin
 
             if (cnt < 3) begin
                 for (i = 0; i < 3; i = i + 1) begin
-                    fc_out = fc_out + data_in_0[i] * fclayer_kernel[cnt * 3 + i];
-                    fc_out = fc_out + data_in_1[i] * fclayer_kernel[cnt * 3 + i + 9];
-                    fc_out = fc_out + data_in_2[i] * fclayer_kernel[cnt * 3 + i + 18];
+                    fc_out_buf = fc_out_buf + data_in_0[i] * fclayer_kernel[cnt * 3 + i];
+                    fc_out_buf = fc_out_buf + data_in_1[i] * fclayer_kernel[cnt * 3 + i + 9];
+                    fc_out_buf = fc_out_buf + data_in_2[i] * fclayer_kernel[cnt * 3 + i + 18];
                 end
             end
             cnt = cnt + 1;
         
         end
+        fc_out = ($signed(fc_out_buf[20:8]) > 127) ? 127 : ($signed(fc_out_buf[20:8]) < -128) ? -128 : fc_out_buf[15:8];
     end
 endmodule
