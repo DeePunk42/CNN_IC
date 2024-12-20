@@ -82,10 +82,10 @@ module InputModule(
                 cnt_0 = cnt_0 + 1;
             end else begin
                 //data mode
-                data_out[cnt_1%11] = data_in;
-                // if (cnt_1%11 == 0) begin
-                //     data_out = data_buf;
-                // end
+                if (cnt_1%11 == 0) begin
+                    data_out = data_buf;
+                end
+                data_buf[cnt_1%11] = data_in;
                 cnt_1 = cnt_1 + 1;
             end
 
@@ -121,9 +121,9 @@ module Cnt_div_11
     always @(posedge clk or posedge rst) begin
         if (rst) begin
             clkp_div11 <= 1;
-        end else if (cnt == (DIV_CLK >> 1) - 1) begin
+        end else if (cnt == (DIV_CLK >> 1)+1) begin
             clkp_div11 <= 0;
-        end else if (cnt == (DIV_CLK - 1)) begin
+        end else if (cnt == 1) begin
             clkp_div11 <= 1;
         end
     end
@@ -132,9 +132,9 @@ module Cnt_div_11
     always @(negedge clk or posedge rst) begin
         if (rst) begin
             clkn_div11 <= 1;
-        end else if (cnt == (DIV_CLK >> 1) - 1) begin
+        end else if (cnt == (DIV_CLK >> 1)+1) begin
             clkn_div11 <= 0;
-        end else if (cnt == (DIV_CLK - 1)) begin
+        end else if (cnt == 1) begin
             clkn_div11 <= 1;
         end
     end
